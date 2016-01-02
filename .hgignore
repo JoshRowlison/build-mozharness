@@ -23,3 +23,5 @@ logs/
 docs/_build/
 *~
 .idea
+mozharness.egg-info
+test_logs
