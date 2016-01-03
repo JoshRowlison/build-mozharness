@@ -3,6 +3,7 @@
 import sys
 import os
 import re
+import signal
 
 # load modules from parent dir
 sys.path.insert(1, os.path.dirname(sys.path[0]))
@@ -23,11 +24,12 @@ class GetAPK(BaseScript, VirtualenvMixin, ScriptMixin):
         [["--build"], {
             "dest": "build",
             "help": "Specify build number (default 1)",
-            "default": 1
+            "default": "1"
         }],
         [["--version"], {
             "dest": "version",
-            "help": "Specify version number to download (e.g. 23.0b7)"
+            "help": "Specify version number to download (e.g. 23.0b7)",
+            "default": "None"
         }],
         [["--arch"], {
             "dest": "arch",
@@ -42,6 +44,12 @@ class GetAPK(BaseScript, VirtualenvMixin, ScriptMixin):
     ]
 
     arch_values = ("arm", "x86")
+
+    # Cleanup half downloaded files on Ctrl+C
+    def signal_handler(self, signal, frame):
+        print('You pressed Ctrl+C!')
+        ScriptMixin.rmtree(self, os.path.join("build", "apk-download"))
+        sys.exit(0)
 
     def __init__(self, require_config_file=False, config={},
                  all_actions=all_actions):
@@ -70,11 +78,6 @@ class GetAPK(BaseScript, VirtualenvMixin, ScriptMixin):
     def check_argument(self):
         """ Check that the given values are correct
         """
-
-        if not isinstance(self.config['build'], int):
-            self.fatal("Build number: " + self.config['build'] + " is not an integer")
-
-        if self.config["version"] is None:
             self.fatal("Version is required")
 
         if self.config["arch"] not in self.arch_values:
@@ -103,12 +106,16 @@ class GetAPK(BaseScript, VirtualenvMixin, ScriptMixin):
                ".android-" + arch_file
 
     def download(self, filename, url):
+        download_dir = os.path.join("build", "apk-download")
+        ScriptMixin.mkdir_p(self, download_dir)
+
         apk_url = url + ".apk"
         checksum_url = url + ".checksums"
-        filename_apk = filename + ".apk"
+        filename_apk = os.path.join(download_dir, filename + ".apk")
+        filename_checksums = os.path.join(download_dir, filename + ".checksums")
         ScriptMixin.download_file(self, apk_url, filename_apk)
-        checksum_file = ScriptMixin.download_file(self, checksum_url, filename + ".checksums")
-        self.check_apk(filename_apk, checksum_file)
+        ScriptMixin.download_file(self, checksum_url, filename_checksums)
+        self.check_apk(filename_apk, filename_checksums)
 
     def download_apk(self):
         self.check_argument()
@@ -149,4 +156,6 @@ class GetAPK(BaseScript, VirtualenvMixin, ScriptMixin):
 # main {{{1
 if __name__ == '__main__':
     myScript = GetAPK()
+    signal.signal(signal.SIGINT, myScript.signal_handler)
     myScript.run_and_exit()
+
