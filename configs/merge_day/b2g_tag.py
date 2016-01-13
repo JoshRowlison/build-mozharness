@@ -1,13 +1,4 @@
-LIVE_B2G_BRANCHES = {
-    "mozilla-b2g37_v2_2": {
-        "gaia_branch": "v2.2",
-        "tag_name": "B2G_2_2_%(DATE)s_MERGEDAY",
-    },
-    "mozilla-b2g37_v2_2r": {
-        "gaia_branch": "v2.2r",
-        "tag_name": "B2G_2_2r_%(DATE)s_MERGEDAY",
-    },
-}
+LIVE_B2G_BRANCHES = {}
 
 config = {
     "log_name": "b2g_tag",
