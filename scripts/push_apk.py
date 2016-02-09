@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+ #!/usr/bin/env python
 """ push_apk.py
 
     Upload the apk of a Firefox app on Google play
@@ -9,6 +9,7 @@ import sys
 import os
 
 from oauth2client import client
+from pip._vendor.distlib.compat import raw_input
 
 # load modules from parent dir
 sys.path.insert(1, os.path.dirname(sys.path[0]))
@@ -17,9 +18,9 @@ sys.path.insert(1, os.path.dirname(sys.path[0]))
 from mozharness.base.script import BaseScript
 from mozharness.mozilla.googleplay import GooglePlayMixin
 from mozharness.base.python import VirtualenvMixin
+from scripts.get_apk import GetAPK
 
-
-class PushAPK(BaseScript, GooglePlayMixin, VirtualenvMixin):
+class PushAPK(BaseScript, GooglePlayMixin, VirtualenvMixin, GetAPK):
     all_actions = [
         'create-virtualenv',
         'push_apk',
@@ -67,8 +68,22 @@ class PushAPK(BaseScript, GooglePlayMixin, VirtualenvMixin):
             "dest": "apk_file_armv6",
             "help": "The path to the ARM v6 APK file",
         }],
-
-
+        [["--download"], {
+            "dest": "download",
+            "help": "Flag indicating the files are to be downloaded from FTP",
+            "action": "store_true",
+            "default": False
+        }],
+        [["--version"], {
+            "dest": "ftp_version",
+            "help": "The version of the file to download from FTP",
+            "default": "EMPTY",
+        }],
+        [["--build"], {
+            "dest": "ftp_build",
+            "help": "The build number of the file to download from FTP",
+            "default": "EMPTY",
+        }],
     ]
 
     # Google play has currently 3 tracks. Rollout deploys
@@ -120,21 +135,34 @@ class PushAPK(BaseScript, GooglePlayMixin, VirtualenvMixin):
             self.fatal("Unknown package name value " +
                        self.config['package_name'])
 
-        if not os.path.isfile(self.config['apk_file_x86']):
-            self.fatal("Could not find " + self.config['apk_file_x86'])
-
-        if not os.path.isfile(self.config['apk_file_armv7_v9']):
-            self.fatal("Could not find " + self.config['apk_file_armv7_v9'])
-
-        if not os.path.isfile(self.config['apk_file_armv7_v11']):
-            self.fatal("Could not find " + self.config['apk_file_armv7_v11'])
-
-        if self.config.get('apk_file_armv6') and not os.path.isfile(self.config['apk_file_armv6']):
-            self.fatal("Could not find " + self.config['apk_file_armv6'])
-
         if not os.path.isfile(self.config['google_play_credentials_file']):
             self.fatal("Could not find " + self.config['google_play_credentials_file'])
 
+    def verify_apks(self):
+        """ checks for the apks to be uploaded, prompts the user and calls get_apk to retrieve them from ftp
+        """
+        fail_list=[]
+        allfound=True
+        
+        if not os.path.isfile(self.config['apk_file_x86']):
+            allfound=False
+            fail_list.append(self.config['apk_file_x86'])
+            
+        if not os.path.isfile(self.config['apk_file_armv7_v9']):
+            allfound=False
+            fail_list.append(self.config['apk_file_armv7_v9'])
+            
+        if not os.path.isfile(self.config['apk_file_armv7_v11']):
+            allfound=False
+            fail_list.append(self.config['apk_file_armv7_v11'])
+            
+        if self.config.get('apk_file_armv6') and not os.path.isfile(self.config['apk_file_armv6']):
+            allfound=False
+            fail_list.append(self.config['apk_file_armv6'])
+       
+        if not allfound:    
+            self.fatal("Files not found:"+ os.linesep + os.linesep.join(fail_list))
+                    
     def upload_apks(self, service, apk_files):
         """ Upload the APK to google play
 
@@ -182,13 +210,22 @@ class PushAPK(BaseScript, GooglePlayMixin, VirtualenvMixin):
         self.log('Edit "%s" has been committed' % (commit_request['id']))
 
     def push_apk(self):
-        """ Upload the APK files """
-        self.check_argument()
-        service = self.connect_to_play()
-        apks = [self.config['apk_file_armv7_v9'], self.config['apk_file_armv7_v11'], self.config['apk_file_x86']]
-        if self.config.get('apk_file_armv6'):
-            apks.append(self.config['apk_file_armv6'])
-        self.upload_apks(service, apks)
+        if(self.config['download'] == True):
+            locale = "multi"
+            if(self.config['version'] == "EMPTY" or self.config['build'] == "EMPTY"):
+                self.fatal("Cannot download files without version and build parameters")
+                                                                                     
+            self.config['apk_file_x86']= GetAPK.download(self, self.config['version'], self.config['build'], 'x86', locale)
+            self.config['apk_file_armv7_v9']= GetAPK.download(self, self.config['version'], self.config['build'], 'ARM', locale)
+            self.config['apk_file_armv7_v11']= GetAPK.download(self, self.config['version'], self.config['build'], 'ARM', locale)
+        else:
+            """ Upload the APK files """
+            self.check_argument()
+            service = self.connect_to_play()
+            apks = [self.config['apk_file_armv7_v9'], self.config['apk_file_armv7_v11'], self.config['apk_file_x86']]
+            if self.config.get('apk_file_armv6'):
+                apks.append(self.config['apk_file_armv6'])
+            self.upload_apks(service, apks)
 
     def test(self):
         """ Test if the connexion can be done """
